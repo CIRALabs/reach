@@ -93,6 +93,43 @@ class DPPCode
     ENV['NODEPORT'] || 8081
   end
 
+  # this returns a NET::HTTP that is connected to the correct end point,
+  # having provided the correct Host: header (and SNI!), but occurs over
+  # an IPv6 LL connection.
+  # note that while VERIFY_NONE is specified, the certificate chain is verified
+  # after connection.
+  def llnode_request
+    options = {
+      :verify_mode => OpenSSL::SSL::VERIFY_NONE,
+      :use_ssl => true,
+      :cert    => PledgeKeys.instance.ldevid_pubkey,
+      :key     => PledgeKeys.instance.ldevid_privkey
+    }
+    @ll_pledge_handler = Net::HTTP.new(llv6_host, mudport)
+    #@ll_pledge_handler.set_debug_output($stderr)
+
+    @ll_pledge_handler.use_ssl = true
+    @ll_pledge_handler.cert = PledgeKeys.instance.ldevid_pubkey
+    @ll_pledge_handler.key  = PledgeKeys.instance.ldevid_privkey
+    #@ll_pledge_handler.server_name = ulanodename_iauthority.downcase
+
+    # turn off internal verification, do it ourselves.
+    @ll_pledge_handler.verify_mode = OpenSSL::SSL::VERIFY_NONE
+
+    # bring up the connection
+    @ll_pledge_handler.start
+
+    name = ulanodename_iauthority.downcase
+    peer_cert = OpenSSL::X509::Certificate.new(@ll_pledge_handler.peer_cert)
+
+    unless OpenSSL::SSL.verify_certificate_identity(peer_cert, name)
+
+      puts "Certificate does not validate the connection to #{name}, says: #{peer_cert.subject.to_s}"
+      return nil
+    end
+    @ll_pledge_handler
+  end
+
   # decode the iauthority or URL found in the S field, and turn it into a full
   # URL
   def self.canonicalize_masa_url(url)

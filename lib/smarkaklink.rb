@@ -8,13 +8,7 @@ class Smarkaklink < Pledge
   MASAURLExtn_OID = "1.3.6.1.4.1.46930.2".freeze
 
   def smarkaklink_pledge_handler
-    options = {
-      :verify_mode => OpenSSL::SSL::VERIFY_NONE,
-      :use_ssl => true,
-      :cert    => PledgeKeys.instance.ldevid_pubkey,
-      :key     => PledgeKeys.instance.ldevid_privkey
-    }
-    @kaklink_pledge_handler ||= Net::HTTP.start(jrc_uri.host, jrc_uri.port, options)
+    @kaklink_pledge_handler ||= @dpp.llnode_request
   end
 
   def smarkaklink_masa_handler
