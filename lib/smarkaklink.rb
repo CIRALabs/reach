@@ -84,8 +84,8 @@ class Smarkaklink < Pledge
     end
   end
 
-  def enroll_with_smarkaklink_manufacturer(dpp, saveto = nil)
-    self.jrc_uri = dpp.smarkaklink_enroll_url
+  def enroll_with_smarkaklink_manufacturer(saveto = nil)
+    self.jrc_uri = @dpp.smarkaklink_enroll_url
 
     request = Net::HTTP::Post.new(jrc_uri)
     request.body = idevid_enroll_json
@@ -112,9 +112,9 @@ class Smarkaklink < Pledge
     return PledgeKeys.instance.ldevid_pubkey
   end
 
-  def voucher_request_json(dpp, nonce)
+  def voucher_request_json(nonce)
     # TODO: Add padding
-    ec = OpenSSL::PKey::EC::IES.new(dpp.key, "algorithm")
+    ec = OpenSSL::PKey::EC::IES.new(@dpp.key, "algorithm")
     puts "Nonce is #{nonce}"
     encrypted_nonce = ec.public_encrypt(nonce)
     { "ietf:request-voucher-request":
@@ -149,19 +149,20 @@ class Smarkaklink < Pledge
     end
   end
 
-  def fetch_voucher_request_url(dpp)
-    URI.join("https://mud.#{dpp.ulanodename_iauthority}:#{dpp.mudport}", "/.well-known/est/requestvoucherrequest")
+  def fetch_voucher_request_url
+    URI.join("https://mud.#{@dpp.ulanodename_iauthority}:#{@dpp.mudport}", "/.well-known/est/requestvoucherrequest")
   end
 
-  def fetch_voucher_request(dpp, saveto = nil)
-    self.jrc_uri = fetch_voucher_request_url(dpp)
+  def fetch_voucher_request(saveto = nil)
 
+    self.jrc_uri = fetch_voucher_request_url
     sp_nonce = SecureRandom.base64(16)
 
     request = Net::HTTP::Post.new(self.jrc_uri)
-    request.body = voucher_request_json(dpp, sp_nonce)
+    request.body = voucher_request_json(sp_nonce)
     request.content_type = 'application/json'
     request['Accept'] = 'application/voucher-cms+json'
+
     response = smarkaklink_pledge_handler.request request
 
     if saveto
@@ -176,7 +177,7 @@ class Smarkaklink < Pledge
     # Retrieve and store the MASA URL provided in the AR's certificate
     @masa_cert = smarkaklink_pledge_handler.peer_cert()
     masa_url_ext = @masa_cert.extensions.select { |ext| ext.oid == MASAURLExtn_OID }.try(:first)
-    @masa_url = dpp.smarkaklink
+    @masa_url = @dpp.smarkaklink
     if masa_url_ext
       o_url = @masa_url
       @masa_url = masa_url_ext.value()[2..-1]
@@ -201,12 +202,12 @@ class Smarkaklink < Pledge
     return voucher
   end
 
-  def process_voucher_url(dpp)
-    URI.join("https://#{dpp.ulanodename_iauthority}:#{dpp.mudport}", "/.well-known/est/voucher")
+  def process_voucher_url
+    URI.join("https://#{@dpp.ulanodename_iauthority}:#{@dpp.mudport}", "/.well-known/est/voucher")
   end
 
-  def process_voucher(dpp, voucher, saveto = false)
-    self.jrc_uri = process_voucher_url(dpp)
+  def process_voucher(voucher, saveto = false)
+    self.jrc_uri = process_voucher_url
     request = Net::HTTP::Post.new(self.jrc_uri)
 
     request.content_type = 'application/voucher-cms+json'
@@ -217,13 +218,13 @@ class Smarkaklink < Pledge
 
     case response
     when Net::HTTPBadRequest, Net::HTTPNotFound
-      puts "AR #{process_voucher_url(dpp)} had error processing MASA's voucher: #{response.to_s} #{response.code}"
+      puts "AR #{process_voucher_url} had error processing MASA's voucher: #{response.to_s} #{response.code}"
       return false
 
     when Net::HTTPSuccess
       @telemetry = JSON::parse(response.body)
       status = @telemetry["status"]
-      puts "AR #{process_voucher_url(dpp)} processed voucher, status=#{status}"
+      puts "AR #{process_voucher_url} processed voucher, status=#{status}"
       unless status == "true"
         puts @telemetry
       end
@@ -238,7 +239,6 @@ class Smarkaklink < Pledge
   def process_ca_list_content_type(type, body, saveto = nil)
     ct = Mail::Parsers::ContentTypeParser.parse(type)
     cert_store = OpenSSL::X509::Store.new
-    puts cert_store
     cert_store.add_cert(@masa_cert)
 
     begin
@@ -274,19 +274,19 @@ class Smarkaklink < Pledge
     cert_store
   end
 
-  def request_ca_list_url(dpp)
-    URI.join("https://#{dpp.ulanodename_iauthority}:#{dpp.mudport}", "/.well-known/est/cacerts")
+  def request_ca_list_url
+    URI.join("https://#{@dpp.ulanodename_iauthority}:#{@dpp.mudport}", "/.well-known/est/cacerts")
   end
 
-  def request_ca_list(dpp, saveto = nil)
-    request = Net::HTTP::Get.new(request_ca_list_url(dpp))
+  def request_ca_list(saveto = nil)
+    request = Net::HTTP::Get.new(request_ca_list_url)
     request['Accept'] = 'application/pkix'
     #request['Accept'] = 'application/pkcs7-mime'
     response = smarkaklink_pledge_handler.request request
 
     case response
     when Net::HTTPBadRequest, Net::HTTPNotFound
-      puts "AR #{request_ca_list_url(dpp)} refuses to list CA certificates: #{response.to_s} #{response.code}"
+      puts "AR #{request_ca_list_url} refuses to list CA certificates: #{response.to_s} #{response.code}"
 
     when Net::HTTPSuccess
       ct = response['Content-Type']
@@ -316,8 +316,8 @@ class Smarkaklink < Pledge
     csr
   end
 
-  def perform_simple_enroll_url(dpp)
-    URI.join("https://#{dpp.ulanodename_iauthority}:#{dpp.mudport}", "/.well-known/est/simpleenroll")
+  def perform_simple_enroll_url
+    URI.join("https://#{@dpp.ulanodename_iauthority}:#{@dpp.mudport}", "/.well-known/est/simpleenroll")
   end
 
   def validate_cert(cert)
@@ -329,8 +329,8 @@ class Smarkaklink < Pledge
     valid
   end
 
-  def perform_simple_enroll(dpp, csr, saveto = nil)
-    self.jrc_uri = perform_simple_enroll_url(dpp)
+  def perform_simple_enroll(csr, saveto = nil)
+    self.jrc_uri = perform_simple_enroll_url
     request = Net::HTTP::Post.new(self.jrc_uri)
     request.body = csr.to_der
     # Send PKCS10
@@ -375,12 +375,12 @@ class Smarkaklink < Pledge
     end
   end
 
-  def validate_enroll_url(dpp)
+  def validate_enroll_url
     URI.join("https://" + @masa_url + "/.well-known/est/enrollstatus")
   end
 
-  def validate_enroll(dpp, telemetry)
-    url = validate_enroll_url(dpp)
+  def validate_enroll(telemetry)
+    url = validate_enroll_url
     request = Net::HTTP::Post.new(url)
     request.body = telemetry.to_json
     request.content_type = 'application/json'
@@ -426,32 +426,42 @@ class Smarkaklink < Pledge
   end
 
   def smarkaklink_enroll(dpp, saveto = nil)
+    @dpp = dpp
+
     # Enroll with the manufacturer
-    enroll_with_smarkaklink_manufacturer(dpp, saveto)
+    enroll_with_smarkaklink_manufacturer(saveto)
+
+    ans=STDIN.gets if ENV['CONFIRM']
 
     # Connect to BRSKI join network
-    puts "Connect to #{dpp.essid}"
-    puts "Ensure that URL #{fetch_voucher_request_url(dpp)} is alive"
+    puts "Connect to #{@dpp.essid}"
+    puts "Ensure that URL #{fetch_voucher_request_url} is alive"
 
     # Connect to Adolescent Registrar (AR)
     # Create TLS connection to port 8081
 
+    ans=STDIN.gets if ENV['CONFIRM']
+
     # Pledge Requests Voucher-Request from the Adolescent Registrar
-    voucher = fetch_voucher_request(dpp, saveto)
+    voucher_req = fetch_voucher_request(saveto)
+
+    ans=STDIN.gets if ENV['CONFIRM']
 
     # Smart-Phone connects to MASA
     puts "Connect to Internet-available network"
-    signed_voucher = get_voucher(saveto, voucher)
+    signed_voucher = get_voucher(saveto, voucher_req)
 
     unless signed_voucher
       puts "Failed!"
       return
     end
 
+    ans=STDIN.gets if ENV['CONFIRM']
+
     # Smartpledge processing of voucher
-    puts "Connect to #{dpp.essid}"
-    puts "Ensure that URL #{fetch_voucher_request_url(dpp)} is alive"
-    status_data = process_voucher(dpp, signed_voucher, saveto)
+    puts "Connect to #{@dpp.essid}"
+    puts "Connecting to URL #{fetch_voucher_request_url}"
+    status_data = process_voucher(signed_voucher, saveto)
 
     unless status_data
       puts "Failed to POST voucher to AR"
@@ -468,21 +478,29 @@ class Smarkaklink < Pledge
       return
     end
 
+    ans=STDIN.gets if ENV['CONFIRM']
+
     # Smartphone enrolls
-    request_ca_list(dpp, saveto)
+    request_ca_list(saveto)
+
+    ans=STDIN.gets if ENV['CONFIRM']
 
     csr = generate_csr(saveto)
 
-    cert = perform_simple_enroll(dpp, csr, saveto)
+    cert = perform_simple_enroll(csr, saveto)
+
+    ans=STDIN.gets if ENV['CONFIRM']
 
     puts "Enrollment completed:"
     puts "- Private key in #{PledgeKeys.instance.priv_file}"
     puts "- Certificate in #{PledgeKeys.instance.pub_file}"
 
-    status_data['voucher'] = signed_voucher
+    status_data['voucher'] = Base64.urlsafe_encode64(@raw_voucher)
+
+    ans=STDIN.gets if ENV['CONFIRM']
 
     puts "Reporting status to MASA"
-    validate_enroll(dpp, status_data)
+    validate_enroll(status_data)
   end
 
 end
