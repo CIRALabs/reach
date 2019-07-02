@@ -485,6 +485,8 @@ class Smarkaklink < Pledge
     puts "- Private key in #{PledgeKeys.instance.priv_file}"
     puts "- Certificate in #{PledgeKeys.instance.pub_file}"
 
+    status_data['voucher'] = signed_voucher
+
     puts "Reporting status to MASA"
     validate_enroll(dpp, status_data)
   end

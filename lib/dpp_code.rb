@@ -2,10 +2,17 @@ class DPPCode
   attr_accessor :key, :keybinary, :mac, :smarkaklink, :llv6, :essid
   attr_accessor :dpphash
   attr_accessor :dppcode
+  attr_accessor :linkname
 
   class DPPKeyError < Exception; end
 
   def initialize(str = nil)
+    if ENV['INTERFACE']
+      self.linkname = ENV['INTERFACE']
+    else
+      self.linkname = "wlan0"
+    end
+
     if str
       self.dppcode = str
       parse_dpp
@@ -62,10 +69,14 @@ class DPPCode
 
   # turn compressed hex IPv6 address into something useable for HTTPS
   # use IPAddress module
-  def llv6_as_iauthority
+  def llv6_host
     iid=ACPAddress::parse_hex llv6
     ll = iid.set_ll_prefix
-    "[" + ll.to_s + "%wlan0]"
+    ll.to_s + "%" + linkname
+  end
+
+  def llv6_as_iauthority
+    "[" + llv6_host + "]"
   end
 
   # this routine looks for ULA addresses, and then it picks out the
